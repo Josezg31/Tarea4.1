@@ -35,9 +35,75 @@ app.listen(port, async () => {
   console.log(`Servidor desplegado en puerto: ${port}`);
 });
 
+// Rutas de la API
+app.get("/concesionarios", async (req, res) => {
+  const concesionarios = await db.collection("concesionarios").find().toArray();
+  res.json(concesionarios);
+});
 
+app.post("/concesionarios", async (req, res) => {
+  await db.collection("concesionarios").insertOne(req.body);
+  res.json({ message: "Concesionario creado" });
+});
 
-Lista todos los coches
+app.get("/concesionarios/:id", async (req, res) => {
+  const id = req.params.id;
+  const concesionario = await db.collection("concesionarios").findOne({ _id: new MongoClient.ObjectID(id) });
+  res.json(concesionario);
+});
+
+app.put("/concesionarios/:id", async (req, res) => {
+  const id = req.params.id;
+  await db.collection("concesionarios").updateOne({ _id: new MongoClient.ObjectID(id) }, { $set: req.body });
+  res.json({ message: "Concesionario actualizado" });
+});
+
+app.delete("/concesionarios/:id", async (req, res) => {
+  const id = req.params.id;
+  await db.collection("concesionarios").deleteOne({ _id: new MongoClient.ObjectID(id) });
+  res.json({ message: "Concesionario borrado" });
+});
+
+// Rutas para coches
+app.get("/concesionarios/:id/coches", async (req, res) => {
+  const id = req.params.id;
+  const coches = await db.collection("concesionarios").findOne({ _id: new MongoClient.ObjectID(id) }, { projection: { coches: 1 } });
+  res.json(coches.coches);
+});
+
+app.post("/concesionarios/:id/coches", async (req, res) => {
+  const id = req.params.id;
+  await db.collection("concesionarios").updateOne({ _id: new MongoClient.ObjectID(id) }, { $push: { coches: req.body } });
+  res.json({ message: "Coche añadido" });
+});
+
+app.get("/concesionarios/:id/coches/:cocheId", async (req, res) => {
+  const id = req.params.id;
+  const cocheId = req.params.cocheId;
+  const concesionario = await db.collection("concesionarios").findOne({ _id: new MongoClient.ObjectID(id) });
+  const coche = concesionario.coches.find(c => c._id.toString() === cocheId);
+  res.json(coche);
+});
+
+app.put("/concesionarios/:id/coches/:cocheId", async (req, res) => {
+  const id = req.params.id;
+  const cocheId = req.params.cocheId;
+  await db.collection("concesionarios").updateOne({ _id: new MongoClient.ObjectID(id), "coches._id": new MongoClient.ObjectID(cocheId) }, { $set: { "coches.$": req.body } });
+  res.json({ message: "Coche actualizado" });
+});
+
+app.delete("/concesionarios/:id/coches/:cocheId", async (req, res) => {
+  const id = req.params.id;
+  const cocheId = req.params.cocheId;
+  await db.collection("concesionarios").updateOne({ _id: new MongoClient.ObjectID(id) }, { $pull: { coches: { _id: new MongoClient.ObjectID(cocheId) } } });
+  res.json({ message: "Coche borrado" });
+});
+
+app.listen(port, () => {
+  console.log(`Servidor desplegado en puerto: ${port}`);
+});
+
+//Lista  todos los coches
 app.get("/coches", async (request, response) => {
   const coches = await db.collection("coches").find({}).toArray();
 
