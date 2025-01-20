@@ -10,8 +10,11 @@ const app = express();
 const uri = "mongodb+srv://josezarzuelagarcia:<db_password>@cluster0.8u7qd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
   
-Indicamos que la aplicación puede recibir JSON (API Rest)
+// Indicamos que la aplicación puede recibir JSON (API Rest)
 app.use(express.json());
+
+// Añadimos helmet
+app.use(helmet());
 
 // Indicamos el puerto en el que vamos a desplegar la aplicación
 // eslint-disable-next-line no-undef
