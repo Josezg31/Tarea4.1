@@ -1,145 +1,147 @@
-// Importamos las bibliotecas necesarias.
-// Concretamente el framework express y ciertas librerías de mongodb.
 const express = require("express");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+//Empezamos a usar helmet
+const helmet = require("helmet"); 
 
 // Inicializamos la aplicación
 const app = express();
 
-// URL de conexión
-const uri = "mongodb+srv://josezarzuelagarcia:<db_password>@cluster0.8u7qd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-
-  
-// Indicamos que la aplicación puede recibir JSON (API Rest)
+const uri = "mongodb+srv://josezarzuelagarcia:X0H5GWRjYM62NCur@cluster0.8u7qd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";// Indicamos que la aplicación puede recibir JSON (API Rest)
 app.use(express.json());
 
-// Añadimos helmet
-app.use(helmet());
+// Dejamos de usar helmet
+app.use(helmet()); 
 
 // Indicamos el puerto en el que vamos a desplegar la aplicación
-// eslint-disable-next-line no-undef
 const port = process.env.PORT || 8080;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  },
+  }
 });
-let db;
+
+async function run() {
+  try {
+    // Connect the client to the server (optional starting in v4.7)
+    await client.connect();
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+
+    const database = client.db("ConcesionariosDB");
+    const concesionariosCollection = database.collection("concesionarios");
+
+    // Obtener todos los concesionarios
+    app.get("/concesionarios", async (request, response) => {
+      const concesionarios = await concesionariosCollection.find({}).toArray();
+      response.json(concesionarios);
+    });
+
+    // Crear un nuevo concesionario
+    app.post("/concesionarios", async (request, response) => {
+      const result = await concesionariosCollection.insertOne(request.body);
+      response.json({ message: "Concesionario creado", id: result.insertedId });
+    });
+
+    // Obtener un concesionario por ID
+    app.get("/concesionarios/:id", async (request, response) => {
+      const id = request.params.id;
+      const concesionario = await concesionariosCollection.findOne({ _id: new ObjectId(id) });
+      response.json(concesionario);
+    });
+
+    // Actualizar un concesionario por ID
+    app.put("/concesionarios/:id", async (request, response) => {
+      const id = request.params.id;
+      const result = await concesionariosCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: request.body }
+      );
+      response.json({ message: "Concesionario actualizado", modifiedCount: result.modifiedCount });
+    });
+
+    // Borrar un concesionario por ID
+    app.delete("/concesionarios/:id", async (request, response) => {
+      const id = request.params.id;
+      const result = await concesionariosCollection.deleteOne({ _id: new ObjectId(id) });
+      response.json({ message: "Concesionario borrado", deletedCount: result.deletedCount });
+    });
+
+    // Obtener todos los coches de un concesionario por ID
+    app.get("/concesionarios/:id/coches", async (request, response) => {
+      const id = request.params.id;
+      const concesionario = await concesionariosCollection.findOne({ _id: new ObjectId(id) });
+      response.json(concesionario.coches);
+    });
+    
+    // Añadir un nuevo coche a un concesionario por ID
+    app.post("/concesionarios/:id/coches", async (request, response) => {
+      const id = request.params.id;
+      const coche = request.body;
+      coche._id = new ObjectId(); // Genera un nuevo ObjectId para el coche
+      const result = await concesionariosCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $push: { coches: coche } }
+      );
+      response.json({ message: "Coche añadido", modifiedCount: result.modifiedCount, coche: coche });
+    });
+
+    // Obtener un coche por ID de un concesionario por ID
+    app.get("/concesionarios/:id/coches/:cocheId", async (request, response) => {
+      const id = request.params.id;
+      const cocheId = request.params.cocheId;
+      const concesionario = await concesionariosCollection.findOne({ _id: new ObjectId(id) });
+      const coche = concesionario.coches.find(c => c._id.toString() === cocheId);
+      response.json(coche);
+    });
+
+    // Actualizar un coche por ID de un concesionario por ID
+    app.put("/concesionarios/:id/coches/:cocheId", async (request, response) => {
+      const id = request.params.id;
+      const cocheId = request.params.cocheId;
+      const coche = request.body;
+      try {
+        const concesionario = await concesionariosCollection.findOne({ _id: new ObjectId(id) });
+        if (!concesionario) {
+          return response.status(404).json({ message: "Concesionario no encontrado" });
+        }
+        const cocheIndex = concesionario.coches.findIndex(c => c._id.toString() === cocheId);
+        if (cocheIndex === -1) {
+          return response.status(404).json({ message: "Coche no encontrado" });
+        }
+        coche._id = concesionario.coches[cocheIndex]._id; // Mantén el _id original del coche
+        concesionario.coches[cocheIndex] = coche;
+        const result = await concesionariosCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { coches: concesionario.coches } }
+        );
+        response.json({ message: "Coche actualizado", modifiedCount: result.modifiedCount });
+      } catch (error) {
+        console.error(error);
+        response.status(500).json({ message: "Error al actualizar el coche" });
+      }
+    });
+
+    // Borrar un coche por ID de un concesionario por ID
+    app.delete("/concesionarios/:id/coches/:cocheId", async (request, response) => {
+      const id = request.params.id;
+      const cocheId = request.params.cocheId;
+      const result = await concesionariosCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $pull: { coches: { _id: new ObjectId(cocheId) } } }
+      );
+      response.json({ message: "Coche borrado", modifiedCount: result.modifiedCount });
+    });
+
+  } finally {
+    // Ensures that the client will close when you finish/error
+    // await client.close(); // Comentado para mantener la conexión abierta
+  }
+}
+run().catch(console.dir);
 
 // Arrancamos la aplicación
-app.listen(port, async () => {
-  await client.connect();
-  db = await client.db("mi-proyecto");
-
-  console.log(`Servidor desplegado en puerto: ${port}`);
-});
-
-// Rutas de la API
-app.get("/concesionarios", async (req, res) => {
-  const concesionarios = await db.collection("concesionarios").find().toArray();
-  res.json(concesionarios);
-});
-
-app.post("/concesionarios", async (req, res) => {
-  await db.collection("concesionarios").insertOne(req.body);
-  res.json({ message: "Concesionario creado" });
-});
-
-app.get("/concesionarios/:id", async (req, res) => {
-  const id = req.params.id;
-  const concesionario = await db.collection("concesionarios").findOne({ _id: new MongoClient.ObjectID(id) });
-  res.json(concesionario);
-});
-
-app.put("/concesionarios/:id", async (req, res) => {
-  const id = req.params.id;
-  await db.collection("concesionarios").updateOne({ _id: new MongoClient.ObjectID(id) }, { $set: req.body });
-  res.json({ message: "Concesionario actualizado" });
-});
-
-app.delete("/concesionarios/:id", async (req, res) => {
-  const id = req.params.id;
-  await db.collection("concesionarios").deleteOne({ _id: new MongoClient.ObjectID(id) });
-  res.json({ message: "Concesionario borrado" });
-});
-
-// Rutas para coches
-app.get("/concesionarios/:id/coches", async (req, res) => {
-  const id = req.params.id;
-  const coches = await db.collection("concesionarios").findOne({ _id: new MongoClient.ObjectID(id) }, { projection: { coches: 1 } });
-  res.json(coches.coches);
-});
-
-app.post("/concesionarios/:id/coches", async (req, res) => {
-  const id = req.params.id;
-  await db.collection("concesionarios").updateOne({ _id: new MongoClient.ObjectID(id) }, { $push: { coches: req.body } });
-  res.json({ message: "Coche añadido" });
-});
-
-app.get("/concesionarios/:id/coches/:cocheId", async (req, res) => {
-  const id = req.params.id;
-  const cocheId = req.params.cocheId;
-  const concesionario = await db.collection("concesionarios").findOne({ _id: new MongoClient.ObjectID(id) });
-  const coche = concesionario.coches.find(c => c._id.toString() === cocheId);
-  res.json(coche);
-});
-
-app.put("/concesionarios/:id/coches/:cocheId", async (req, res) => {
-  const id = req.params.id;
-  const cocheId = req.params.cocheId;
-  await db.collection("concesionarios").updateOne({ _id: new MongoClient.ObjectID(id), "coches._id": new MongoClient.ObjectID(cocheId) }, { $set: { "coches.$": req.body } });
-  res.json({ message: "Coche actualizado" });
-});
-
-app.delete("/concesionarios/:id/coches/:cocheId", async (req, res) => {
-  const id = req.params.id;
-  const cocheId = req.params.cocheId;
-  await db.collection("concesionarios").updateOne({ _id: new MongoClient.ObjectID(id) }, { $pull: { coches: { _id: new MongoClient.ObjectID(cocheId) } } });
-  res.json({ message: "Coche borrado" });
-});
-
 app.listen(port, () => {
   console.log(`Servidor desplegado en puerto: ${port}`);
-});
-
-//Lista  todos los coches
-app.get("/coches", async (request, response) => {
-  const coches = await db.collection("coches").find({}).toArray();
-
-  response.json(coches);
-});
-
-// Añadir un nuevo coche
-app.post("/coches", async (request, response) => {
-  await db.collection("coches").insertOne(request.body);
-
-  response.json({ message: "ok" });
-});
-
-// Obtener un solo coche
-app.get("/coches/:id", async (request, response) => {
-  const id = new ObjectId(request.params.id);
-  const coche = await db.collection("coches").find({ _id: id }).toArray();
-
-  response.json({ coche });
-});
-
-// Actualizar un solo coche
-app.put("/coches/:id", async (request, response) => {
-  const id = new ObjectId(request.params.id);
-  await db.collection("coches").updateOne({ _id: id }, { $set: request.body });
-
-  response.json({ message: "ok" });
-});
-
-// Borrar un elemento del array
-app.delete("/coches/:id", async (request, response) => {
-  const id = new ObjectId(request.params.id);
-  await db.collection("coches").deleteOne({ _id: id });
-
-  response.json({ message: "ok" });
 });
